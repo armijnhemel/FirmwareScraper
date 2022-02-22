@@ -1,6 +1,6 @@
-from re import findall
 from datetime import datetime
 from random import uniform
+from re import findall
 from time import sleep
 
 from scrapy import Request, Spider
@@ -46,7 +46,7 @@ class AsusSpider(Spider):
         for header in header_scripts:
             if '"url"' not in header:
                 continue
-            url_redirects.update(re.findall(r'"url": "(https://[\w\d\-\_\./]+)"', header))
+            url_redirects.update(findall(r'"url": "(https://[\w\d\-\_\./]+)"', header))
 
         for url_redirect in url_redirects:
             if url_redirect[-1] != '/':

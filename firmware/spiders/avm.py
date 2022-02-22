@@ -1,116 +1,115 @@
-from calendar import month_abbr
-from re import search
+import os
+import re
+from json import loads
 from typing import Generator, Union
 
-from scrapy import Request, Spider
+from scrapy import Request
 from scrapy.http import Response
 from scrapy.loader import ItemLoader
 
+from firmware.custom_requests import FTPFileRequest, FTPListRequest
+from firmware.custom_spiders import FTPSpider
 from firmware.items import FirmwareItem
 
 
-class AvmSpider(Spider):
+class AvmSpider(FTPSpider):
     handle_httpstatus_list = [404]
     name = 'avm'
+    allowed_domains = ['ftp.avm.de', 'avm.de']
+    start_urls = ['ftp://ftp.avm.de/']
+    custom_settings = {
+        # robots.txt is not an FTP concept
+        'ROBOTSTXT_OBEY': False,
+        # being nice to AVM servers
+        'CONCURRENT_REQUESTS': 1,
+        'CONCURRENT_ITEMS': 1,
+        'DOWNLOAD_DELAY': 0.75,
+        'RANDOMIZE_DOWNLOAD_DELAY': True,
+        'REFERER_ENABLED': False
+    }
+    filter_eol_products = True
 
-    allowed_domains = ['download.avm.de']
+    meta_regex = {
+        'device_name': re.compile(r'^Produkt\s*:\s+(.*)$', flags=re.MULTILINE | re.IGNORECASE),
+        'firmware_version': re.compile(r'^Version\s*:\s+(.*)$', flags=re.MULTILINE | re.IGNORECASE),
+        'release_date': re.compile(r'^Release-Datum\s*:\s+(.*)$', flags=re.MULTILINE | re.IGNORECASE)
+    }
 
-    start_urls = [
-        'http://download.avm.de/fritzbox/',
-        'http://download.avm.de/fritzwlan/',
-        'http://download.avm.de/fritzpowerline/'
-    ]
+    def parse(self, response: Response, **kwargs):  # pylint: disable=unused-argument
+        folder = loads(response.body)
 
-    def parse(self, response: Response) -> Generator[Request, None, None]:
-        for product_url in self.extract_links(response=response, ignore=('beta', 'tools', 'license', '..')):
-            yield Request(url=product_url, callback=self.parse_product)
+        yield from self.recurse_sub_folders(folder, base_url=response.url)
+        yield from self.search_firmware_images(folder, base_url=response.url)
 
-    def parse_product(self, response: Response) -> Union[Generator[FirmwareItem, None, None], Generator[Request, None, None]]:
-        path = response.request.url.split('/')[:-1]
-        if path[-1] == 'fritz.os':
-            yield from self.parse_firmware(response=response, device_name=path[-3])
-        else:
-            for sub_directory in self.extract_links(response=response, ignore=('recover', '..')):
-                yield Request(url=response.urljoin(sub_directory), callback=self.parse_product)
+    def parse_metadata_and_download_image(self, response: Response, image_path, **kwargs) -> Generator[Union[Request, FirmwareItem], None, None]:  # pylint: disable=unused-argument
+        info_de_txt = response.body.decode('latin-1')
 
-    def parse_firmware(self, response: Response, device_name: str) -> Generator[FirmwareItem, None, None]:
-        release_dates = self.extract_dates(response)
-        for index, file_url in enumerate(self.extract_links(response=response, ignore='..')):
-            if file_url.endswith('.image'):
-                yield from self.prepare_item_pipeline(meta_data=self.prepare_meta_data(device_name=device_name, release_date=release_dates[index], file_url=file_url))
-
-    @staticmethod
-    def prepare_item_pipeline(meta_data: dict) -> Generator[FirmwareItem, None, None]:
-        loader = ItemLoader(item=FirmwareItem(), selector=meta_data['file_urls'])
-        loader.add_value('file_urls', meta_data['file_urls'])
-        loader.add_value('vendor', meta_data['vendor'])
-        loader.add_value('device_name', meta_data['device_name'])
-        loader.add_value('device_class', meta_data['device_class'])
-        loader.add_value('firmware_version', meta_data['firmware_version'])
-        loader.add_value('release_date', meta_data['release_date'])
-        yield loader.load_item()
-
-    def prepare_meta_data(self, device_name: str, release_date: str, file_url: str) -> dict:
-        return {
-            'file_urls': [file_url],
+        meta_data = {
             'vendor': 'AVM',
-            'device_name': device_name,
-            'firmware_version': self.extract_version(firmware=file_url.split('/')[-1], product_specifier=device_name),
-            'device_class': self.map_device_class(product=device_name),
-            'release_date': release_date
+            'file_urls': [image_path],
+            'device_name': self.meta_regex['device_name'].findall(info_de_txt)[0].strip(),
+            'device_class': self.map_device_class(image_path=image_path),
+            'firmware_version': self.meta_regex['firmware_version'].findall(info_de_txt)[0].strip().split(' ')[-1],
+            'release_date': self.meta_regex['release_date'].findall(info_de_txt)[0].strip().replace('.', '-').replace('/', '-')
         }
 
+        if self.filter_eol_products:
+            product_path = image_path.split('/')[-4]
+            product_line = image_path.split('/')[-5]
+            yield Request(f'https://avm.de/produkte/{product_line}/{product_path}', callback=self.verify_support, cb_kwargs={'meta_data': meta_data})
+        else:
+            yield from self.item_pipeline(meta_data)
+
+    def search_firmware_images(self, folder: list, base_url: str) -> Generator[FTPFileRequest, None, None]:
+        for image in AvmSpider._image_file_filter(folder):
+            image_path = os.path.join(base_url, image['filename'])
+            info_path = os.path.join(base_url, 'info_de.txt')
+            yield FTPFileRequest(info_path, callback=self.parse_metadata_and_download_image, cb_kwargs={'image_path': image_path})
+
+    def verify_support(self, response: Response, meta_data: dict, **kwargs):  # pylint: disable=unused-argument
+        if response.status == 200:
+            yield from self.item_pipeline(meta_data)
+
     @staticmethod
-    def map_device_class(product: str) -> str:
-        if product.startswith(('fritzrepeater', 'fritzwlan-repeater')):
+    def _folder_filter(entries):
+        for entry in entries:
+            if any([entry['filetype'] != 'd',
+                    entry['filename'] in ['..', 'archive', 'beta', 'other', 'recover', 'belgium', 'tools', 'switzerland'],
+                    entry['linktarget'] is not None]):
+                continue
+            yield entry
+
+    @staticmethod
+    def _image_file_filter(entries: list):
+        for entry in entries:
+            if any([entry['filetype'] != '-',
+                    not entry['filename'].endswith(('.image', '.zip')),
+                    entry['linktarget'] is not None]):
+                continue
+            yield entry
+
+    @staticmethod
+    def item_pipeline(meta_data: dict) -> Generator[FirmwareItem, None, None]:
+        loader = ItemLoader(item=FirmwareItem(), selector=meta_data['file_urls'])
+        for key, value in meta_data.items():
+            loader.add_value(key, value)
+        yield loader.load_item()
+
+    @staticmethod
+    def recurse_sub_folders(folder: list, base_url: str):
+        for sub_folder in AvmSpider._folder_filter(folder):
+            name = sub_folder['filename']
+            recursive_path = f'{os.path.join(base_url, name)}/'
+            yield FTPListRequest(recursive_path)
+
+    @staticmethod
+    def map_device_class(image_path: str) -> str:
+        # /fritzbox/<PRODUCT_PARENT>/<locale>/fritz.os/<image>
+        product_parent = image_path.split('/')[-4]
+        if product_parent.startswith(('fritzrepeater', 'fritzwlan-repeater')):
             return 'Repeater'
-        if product.startswith('fritzwlan-usb'):
+        if product_parent.startswith('fritzwlan-usb'):
             return 'Wifi-Stick'
-        if product.startswith('fritzpowerline'):
+        if product_parent.startswith('fritzpowerline'):
             return 'PLC Adapter'
         return 'Router'
-
-    @staticmethod
-    def extract_links(response: Response, ignore: Union[str, tuple]) -> list:
-        return [response.urljoin(p) for p in response.xpath('//a/@href').extract() if not p.startswith(ignore)]
-
-    def extract_dates(self, response: Response) -> list:
-        release_dates = list()
-        for text in response.xpath('//pre/text()').extract():
-            match = search(r'(\d{2}-\w{3}-\d{4})', text)
-            if match:
-                release_dates.append(self.convert_date(match.group(1)))
-
-        return release_dates
-
-    @staticmethod
-    def convert_date(date: str) -> str:
-        day_month_year = date.split('-')
-        month_digit = list(month_abbr).index(day_month_year[1])
-        day_month_year[1] = str(month_digit) if month_digit > 9 else '0' + str(month_digit)
-
-        return '-'.join(day_month_year)
-
-    def extract_version(self, firmware: str, product_specifier: str) -> str:
-        try:
-            if 'fritz.powerline' in firmware:
-                return self.extract_powerline_version(firmware, product_specifier)
-            return search(r'FRITZ\.(Box|Powerline|Repeater)_(\w+)(\.(\w{2}-)+\w{2}\.)?([-\.])?(.*)\.image', firmware).group(6)
-        except (AttributeError, IndexError, ValueError):
-            return '0.0'
-
-    def extract_powerline_version(self, firmware, product_specifier):
-        for hardware_number in self.generate_permutations(array=product_specifier.split('-')[1:], prefix='', index=0):
-            matches = search(r'(?:' + r''.join(hardware_number.upper()) + r')_(.*).image', firmware)
-            if matches:
-                return matches.group(1).replace('_', '.')
-        raise ValueError('No version found in firmware string')
-
-    def generate_permutations(self, array: list, prefix: str, index: int) -> Generator[str, None, None]:
-        if index < len(array) - 1:
-            for result in self.generate_permutations(array=array, prefix=prefix + array[index] + '_', index=index + 1):
-                yield result
-            for result in self.generate_permutations(array=array, prefix=prefix + array[index], index=index + 1):
-                yield result
-        else:
-            yield prefix + array[index]
