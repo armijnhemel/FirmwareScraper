@@ -34,7 +34,6 @@ class AsusSpider(Spider):
         base_url.format('Modem-Routers'),
         base_url.format('WiFi-6')
     ]
-
     custom_settings = {
         'DOWNLOAD_DELAY': 1.0,
         'CONCURRENT_REQUESTS_PER_IP': 1,
@@ -48,6 +47,7 @@ class AsusSpider(Spider):
             if '"url"' not in header:
                 continue
             url_redirects.update(findall(r'"url": "(https://[\w\d\-\_\./]+)"', header))
+
         for url_redirect in url_redirects:
             if url_redirect[-1] != '/':
                 continue
