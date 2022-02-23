@@ -7,7 +7,7 @@ from scrapy.http import Response
 from scrapy.loader import ItemLoader
 
 from firmware.items import FirmwareItem
-from firmware.spiders.avm import AvmSpider
+from firmware.spiders.avm import AVM
 
 
 class AVMGPL(Spider):
@@ -70,7 +70,7 @@ class AVMGPL(Spider):
             'vendor': 'AVM',
             'device_name': device_name,
             'firmware_version': '0.0' if firmware_version is None else firmware_version.group(1),
-            'device_class': AvmSpider.map_device_class(device_name),
+            'device_class': AVM.map_device_class(device_name),
             'release_date': archive[1][0],
         }
 

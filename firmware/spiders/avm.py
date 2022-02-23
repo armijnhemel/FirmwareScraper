@@ -5,18 +5,18 @@ from typing import Generator, Union
 
 from scrapy import Request
 from scrapy.http import Response
-from scrapy.loader import ItemLoader
 
 from firmware.custom_requests import FTPFileRequest, FTPListRequest
 from firmware.custom_spiders import FTPSpider
 from firmware.items import FirmwareItem
 
 
-class AvmSpider(FTPSpider):
+class AVM(FTPSpider):
     handle_httpstatus_list = [404]
     name = 'avm'
     allowed_domains = ['ftp.avm.de', 'avm.de']
     start_urls = ['ftp://ftp.avm.de/']
+
     custom_settings = {
         # robots.txt is not an FTP concept
         'ROBOTSTXT_OBEY': False,
@@ -27,6 +27,7 @@ class AvmSpider(FTPSpider):
         'RANDOMIZE_DOWNLOAD_DELAY': True,
         'REFERER_ENABLED': False
     }
+
     filter_eol_products = True
 
     meta_regex = {
@@ -61,7 +62,7 @@ class AvmSpider(FTPSpider):
             yield from self.item_pipeline(meta_data)
 
     def search_firmware_images(self, folder: list, base_url: str) -> Generator[FTPFileRequest, None, None]:
-        for image in AvmSpider._image_file_filter(folder):
+        for image in self._image_file_filter(folder):
             image_path = os.path.join(base_url, image['filename'])
             info_path = os.path.join(base_url, 'info_de.txt')
             yield FTPFileRequest(info_path, callback=self.parse_metadata_and_download_image, cb_kwargs={'image_path': image_path})
@@ -88,16 +89,9 @@ class AvmSpider(FTPSpider):
                 continue
             yield entry
 
-    @staticmethod
-    def item_pipeline(meta_data: dict) -> Generator[FirmwareItem, None, None]:
-        loader = ItemLoader(item=FirmwareItem(), selector=meta_data['file_urls'])
-        for key, value in meta_data.items():
-            loader.add_value(key, value)
-        yield loader.load_item()
-
-    @staticmethod
-    def recurse_sub_folders(folder: list, base_url: str):
-        for sub_folder in AvmSpider._folder_filter(folder):
+    @classmethod
+    def recurse_sub_folders(cls, folder: list, base_url: str):
+        for sub_folder in cls._folder_filter(folder):
             name = sub_folder['filename']
             recursive_path = f'{os.path.join(base_url, name)}/'
             yield FTPListRequest(recursive_path)

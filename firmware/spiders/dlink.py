@@ -1,14 +1,13 @@
 from datetime import datetime
 from typing import Generator
 
-from scrapy import Request, Spider
+from scrapy import Request
 from scrapy.http import Response
-from scrapy.loader import ItemLoader
 
-from firmware.items import FirmwareItem
+from firmware.custom_spiders import FirmwareSpider
 
 
-class DLink(Spider):
+class DLink(FirmwareSpider):
     handle_httpstatus_list = [404]
     name = 'dlink'
     allowed_domains = ['eu.dlink.com', 'ftp.dlink.de']
@@ -61,15 +60,15 @@ class DLink(Spider):
     }
 
     def parse(self, response: Response, **kwargs) -> Generator[Request, None, None]:  # pylint: disable=unused-argument
-        names = response.xpath(DLink.xpath['product_names_in_category']).extract()
-        detail_links = response.xpath(DLink.xpath['detail_pages_in_category']).extract()
+        names = response.xpath(self.xpath['product_names_in_category']).extract()
+        detail_links = response.xpath(self.xpath['detail_pages_in_category']).extract()
         for name, detail_link in zip(names, detail_links):
             yield Request(url=response.urljoin(detail_link), callback=self.process_detail_page, cb_kwargs=dict(product_name=name))
 
     def process_detail_page(self, response: Response, product_name: str, product_revision: str = ''):
         if product_revision == '':
-            latest_revision_on_page = response.xpath(DLink.xpath['detail_latest_revision_name']).extract()
-            latest_revision_query_param = response.xpath(DLink.xpath['detail_latest_revision_param']).extract()
+            latest_revision_on_page = response.xpath(self.xpath['detail_latest_revision_name']).extract()
+            latest_revision_query_param = response.xpath(self.xpath['detail_latest_revision_param']).extract()
 
             if len(latest_revision_on_page + latest_revision_query_param) > 0:
                 yield Request(
@@ -79,9 +78,9 @@ class DLink(Spider):
                 )
                 return
 
-        version = response.xpath(DLink.xpath['version']).extract()
-        release_date = response.xpath(DLink.xpath['date']).extract()
-        download_link = response.xpath(DLink.xpath['download_link']).extract()
+        version = response.xpath(self.xpath['version']).extract()
+        release_date = response.xpath(self.xpath['date']).extract()
+        download_link = response.xpath(self.xpath['download_link']).extract()
 
         if len(download_link + release_date + version) != 3:
             return
@@ -97,17 +96,10 @@ class DLink(Spider):
 
         yield from self.item_pipeline(meta_data)
 
-    @staticmethod
-    def item_pipeline(meta_data: dict) -> Generator[FirmwareItem, None, None]:
-        loader = ItemLoader(item=FirmwareItem(), selector=meta_data['file_urls'])
-        for key, value in meta_data.items():
-            loader.add_value(key, value)
-        yield loader.load_item()
-
-    @staticmethod
-    def map_device_class(image_path: str) -> str:
+    @classmethod
+    def map_device_class(cls, image_path: str) -> str:
         device_class = 'unknown'
-        for key, value in DLink.device_classes_dict.items():
+        for key, value in cls.device_classes_dict.items():
             if key in image_path.lower():
                 device_class = value
                 break
