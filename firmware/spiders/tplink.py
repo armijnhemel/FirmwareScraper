@@ -41,7 +41,9 @@ class TPLink(FirmwareSpider):
         'product_pages': '//li[@class="tp-product-pagination-item"]/a[@class="tp-product-pagination-btn"]/@href',
         'product_name': '//h2[@class="product-name"]/text()|//label[@class="model-select"]/p/span/text()',
         'product_support_link': '//a[contains(@class,"support")]/@href',
-        'firmware_download_link': '//tr[@class="basic-info"][1]//a[contains(@class, "download") and contains(@data-vars-event-category, "Firmware") and (contains(@href, "_V") or contains(@href, "_v") or contains(@href, "firmware"))]/@href',
+        'firmware_download_link': '//tr[@class="basic-info"][1]//a[contains(@class, "download") and '
+                                  'contains(@data-vars-event-category, "Firmware") and (contains(@href, "_V") or '
+                                  'contains(@href, "_v") or contains(@href, "firmware"))]/@href',
         'device_revision': '//span[@id="verison-hidden"]/text()',
         'firmware_release_date': '//tr[@class="detail-info"][1]/td[1]/span[2]/text()[1]',
     }
@@ -69,7 +71,8 @@ class TPLink(FirmwareSpider):
     def parse_firmware(cls, support_page: Response, device_name: str, device_class: str) -> Generator[FirmwareItem, None, None]:
         file_url = cls.extract_firmware_download_link(support_page)
         if file_url is None:
-            return None
+            yield None
+            return
 
         device_revision = cls.extract_device_revision(support_page)
         firmware_release_date = cls.extract_firmware_release_date(support_page)
