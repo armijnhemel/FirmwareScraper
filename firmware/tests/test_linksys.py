@@ -3,7 +3,7 @@ import pytest
 from firmware.spiders import linksys
 from firmware.tests.mock_classes import MockRequest, MockResponse
 
-PRODUCT_LIST_PAGE = u'''<!DOCTYPE html>
+PRODUCT_LIST_PAGE = '''<!DOCTYPE html>
                         <html>
                             <head></head>
                             <body>
@@ -23,7 +23,7 @@ PRODUCT_LIST_PAGE = u'''<!DOCTYPE html>
                         </html>
                      '''
 
-PRODUCT_PAGE = u'''<!DOCTYPE html>
+PRODUCT_PAGE = '''<!DOCTYPE html>
                    <html>
                        <head></head>
                        <body>
@@ -43,7 +43,7 @@ PRODUCT_PAGE = u'''<!DOCTYPE html>
                    </html>
                  '''
 
-FIRMWARE_PAGE = u'''<!DOCTYPE html>
+FIRMWARE_PAGE = '''<!DOCTYPE html>
                     <html>
                         <head></head>
                         <body>
@@ -93,7 +93,7 @@ SEARCH_TEXT = '<h3>Firmware (für USA)</h3>Ver.1.203.23 (build 20394)<br>Datum d
 
 @pytest.fixture(scope='session', autouse=True)
 def spider_instance():
-    return linksys.LinksysSpider()
+    return linksys.Linksys()
 
 
 @pytest.fixture(scope='function', autouse=True)
@@ -144,21 +144,21 @@ def test_parse_product(spider_instance, response, device_name, expected):
 )
 def test_parse_versions(monkeypatch, spider_instance, response, device_name, expected):
     with monkeypatch.context() as monkey:
-        monkey.setattr(linksys.LinksysSpider, 'parse_urls', lambda *_, **__: [1])
+        monkey.setattr(linksys.Linksys, 'parse_urls', lambda *_, **__: [1])
         assert list(spider_instance.parse_versions(response=response, device_name=device_name)) == expected
 
 
 @pytest.mark.parametrize('device_name, version, expected', [('WAG Broadband Router', FIRMWARE_PAGE, [1, 1, 1])])
 def test_parse_urls(monkeypatch, spider_instance, device_name, version, expected):
     with monkeypatch.context() as monkey:
-        monkey.setattr(linksys.LinksysSpider, 'parse_firmware', lambda *_, **__: [1])
+        monkey.setattr(linksys.Linksys, 'parse_firmware', lambda *_, **__: [1])
         assert list(spider_instance.parse_urls(device_name=device_name, version=version)) == expected
 
 
 @pytest.mark.parametrize('meta_data, expected', [(dict(key=2), []), (dict(key3=3), [1])])
 def test_parse_firmware(spider_instance, monkeypatch, meta_data, expected):
     with monkeypatch.context() as monkey:
-        monkey.setattr(linksys.LinksysSpider, 'prepare_item_pipeline', lambda *_, **__: [1])
+        monkey.setattr(linksys.Linksys, 'prepare_item_pipeline', lambda *_, **__: [1])
         spider_instance.PRODUCT_DICTIONARIES = [dict(key=1), dict(key=2)]
         assert list(spider_instance.parse_firmware(meta_data=meta_data)) == expected
 
@@ -202,17 +202,3 @@ def test_prepare_item_pipeline(spider_instance, meta_data, expected):
 )
 def test_prepare_meta_data(spider_instance, firmware, device_name, device_class, expected):
     assert spider_instance.prepare_meta_data(firmware=firmware, device_name=device_name, device_class=device_class) == expected
-
-
-@pytest.mark.parametrize('product, exception, expected', [
-    ('LAPAC1750PRO - Linksys LAPAC1750PRO Business AC1750 Pro Dual-Band Access Point', False, 'Business Access Point'),
-    ('WAG200G - Wireless-G ADSL2+ Gateway', False, 'Modem Router'),
-    ('Is that a product?2000', True, '')
-    ]
-)
-def test_map_device_class(spider_instance, product, exception, expected):
-    if exception:
-        with pytest.raises(linksys.UnknownDeviceClassException):
-            spider_instance.map_device_class(product=product)
-    else:
-        assert spider_instance.map_device_class(product=product) == expected
