@@ -1,133 +1,159 @@
 import re
-from datetime import datetime
-from typing import Generator
+from typing import Generator, Optional, Tuple
 
-from scrapy import Request, Spider
+from scrapy import Request
 from scrapy.http import Response
-from scrapy.loader import ItemLoader
 
+from firmware.custom_spiders import FirmwareSpider
 from firmware.items import FirmwareItem
 
 
 class ClassIdentifier:
-    def __init__(self, shortcuts):
-        self.shortcuts = shortcuts
+    def __init__(self, shortcuts: tuple):
+        self.shortcuts: tuple = shortcuts
 
 
-class UnknownDeviceClassException(Exception):
-    pass
-
-
-class LinksysSpider(Spider):
-    PRODUCT_DICTIONARIES = list()
+class Linksys(FirmwareSpider):
+    PRODUCT_DICTIONARIES = []
     handle_httpstatus_list = [404]
     name = 'linksys'
 
     device_classes = {
-        ClassIdentifier(['AM']): 'Modem',
-        ClassIdentifier(['CIT']): 'Internet Telephone',
-        ClassIdentifier(['EF', 'EP', 'PPS', 'PSU', 'WPS']): 'Print Server',
-        ClassIdentifier(['DMP', 'DMC', 'DMR', 'DMS', 'KWH', 'MCC']): 'Wireless Home Audio',
-        ClassIdentifier(['DMA']): 'Media Center Extender',
-        ClassIdentifier(['LACP']): 'Injector',
-        ClassIdentifier(['LACX', 'LACG']): 'Transceiver',
-        ClassIdentifier(['LAPN', 'LAPAC']): 'Business Access Point',
-        ClassIdentifier(['LCA']): 'Business Camera',
-        ClassIdentifier(['LMR', 'LNR']): 'Business Video Recorder',
-        ClassIdentifier(['LNE', 'EG', 'WMP']): 'PCI Network Adapter',
-        ClassIdentifier(['LRT']): 'VPN Router',
-        ClassIdentifier(['LGS']): 'Business Switch',
-        ClassIdentifier(['MR', 'EA', 'WRT', 'E', 'BEF', 'WKU', 'WRK']): 'Router',
-        ClassIdentifier(['M10', 'M20']): 'Hotspot',
-        ClassIdentifier(['NMH']): 'Media Hub',
-        ClassIdentifier(['NSL']): 'Network Storage Link',
-        ClassIdentifier(['PCM']): 'CardBus PC Card',
-        ClassIdentifier(['PL']): 'PLC Adapter',
-        ClassIdentifier(['RE', 'WRE']): 'Repeater',
-        ClassIdentifier(['SE', 'EZX']): 'Home Switch',
-        ClassIdentifier(['WAP']): 'Home Access Point',
-        ClassIdentifier(['WET', 'WUM', 'WES']): 'Bridge',
-        ClassIdentifier(['WGA', 'WMA', 'WPC']): 'Wireless Adapter',
-        ClassIdentifier(['WHW', 'VLP', 'MX']): 'Wifi Mesh System',
-        ClassIdentifier(['WMC', 'WVC']): 'Home Camera',
-        ClassIdentifier(['WML']): 'Music System',
-        ClassIdentifier(['WUSB', 'USB', 'AE']): 'Wifi USB Adapter',
-        ClassIdentifier(['X', 'AG', 'WAG']): 'Modem Router'
+        ClassIdentifier(('AM', )): 'Modem',
+        ClassIdentifier(('CIT', )): 'Internet Telephone',
+        ClassIdentifier(('EF', 'EP', 'PPS', 'PSU', 'WPS')): 'Print Server',
+        ClassIdentifier(('DMP', 'DMC', 'DMR', 'DMS', 'KWH', 'MCC')): 'Wireless Home Audio',
+        ClassIdentifier(('DMA', )): 'Media Center Extender',
+        ClassIdentifier(('LACP', )): 'Injector',
+        ClassIdentifier(('LACX', 'LACG')): 'Transceiver',
+        ClassIdentifier(('LAPN', 'LAPAC')): 'Business Access Point',
+        ClassIdentifier(('LCA', )): 'Business Camera',
+        ClassIdentifier(('LMR', 'LNR')): 'Business Video Recorder',
+        ClassIdentifier(('LNE', 'EG', 'WMP')): 'PCI Network Adapter',
+        ClassIdentifier(('LRT', )): 'VPN Router',
+        ClassIdentifier(('LGS', )): 'Business Switch',
+        ClassIdentifier(('MR', 'EA', 'WRT', 'E', 'BEF', 'WKU', 'WRK')): 'Router',
+        ClassIdentifier(('M10', 'M20')): 'Hotspot',
+        ClassIdentifier(('NMH', )): 'Media Hub',
+        ClassIdentifier(('NSL', )): 'Network Storage Link',
+        ClassIdentifier(('PCM', )): 'CardBus PC Card',
+        ClassIdentifier(('PL', )): 'PLC Adapter',
+        ClassIdentifier(('RE', 'WRE')): 'Repeater',
+        ClassIdentifier(('SE', 'EZX')): 'Home Switch',
+        ClassIdentifier(('WAP', )): 'Home Access Point',
+        ClassIdentifier(('WET', 'WUM', 'WES')): 'Bridge',
+        ClassIdentifier(('WGA', 'WMA', 'WPC')): 'Wireless Adapter',
+        ClassIdentifier(('WHW', 'VLP', 'MX')): 'Wifi Mesh System',
+        ClassIdentifier(('WMC', 'WVC')): 'Home Camera',
+        ClassIdentifier(('WML', )): 'Music System',
+        ClassIdentifier(('WUSB', 'USB', 'AE')): 'Wifi USB Adapter',
+        ClassIdentifier(('X', 'AG', 'WAG')): 'Modem Router'
     }
 
-    x_path = {
-        'product_urls': '//div[@class="item"]//@href',
-        'device_names': '//div[@class="item"]//a/text()',
-        'software_exists': '//div[@class="support-downloads col-sm-6"]//a[@title="Download Software"]/@href',
-        # german text: Software herunterladen
-        'firmware': '//div[@id="support-article-downloads"]/div[@class="article-accordian-content collapse-me"]',
+    custom_settings = {
+        # robots.txt is not an FTP concept
+        'ROBOTSTXT_OBEY': False,
+        # being nice to AVM servers
+        'CONCURRENT_REQUESTS': 1,
+        'CONCURRENT_ITEMS': 1,
+        'DOWNLOAD_DELAY': 0.75,
+        'RANDOMIZE_DOWNLOAD_DELAY': True,
+        'REFERER_ENABLED': True
     }
 
-    start_urls = ['https://www.linksys.com/us/support/sitemap/']
+    xpath = {
+        'product_urls_on_page': '//a[@class="thumb"]/@href',
+        'get_download_page': '//*[contains(text(), "Firmware-Verbesserungen")]/following::p[1]/'
+                             'a[contains(text(), "herunterladen")]/@href',
+        'download_link': '//*[contains(text(), "Firmware")]//ancestor::*//a[contains(@href, "firmware")]/@href',
+        'date_and_version': '//*[contains(text(), "Firmware")]//ancestor::*//*[contains(text(), "Ver. ") or contains(text(), "Version: ")]/text()',
+        'product_name': '//*[@class="part-number"]/text()',
+    }
 
-    def parse(self, response: Response) -> Generator[Request, None, None]:
-        for product_url, device_name in list(zip(response.xpath(self.x_path['product_urls']).extract(),
-                                                 response.xpath(self.x_path['device_names']).extract())):
-            yield Request(url=response.urljoin(product_url), callback=self.parse_product,
-                          cb_kwargs=dict(device_name=device_name))
+    start_urls = [
+        'https://www.linksys.com/de/c/whole-home-mesh-wifi/?q=%3AsortByProductRank&page=0',
+        'https://www.linksys.com/de/c/WLAN-Router/?q=%3AsortByProductRank&page=0',
+        'https://www.linksys.com/de/c/wlan-range-extender/?q=%3AsortByProductRank&page=0',
+        'https://www.linksys.com/de/c/Netzwerk-Switches/?q=%3AsortByProductRank&page=0',
+    ]
 
-    def parse_product(self, response: Response, device_name: str) -> Generator[Request, None, None]:
-        software_page = response.xpath(self.x_path['software_exists']).get()
-        if software_page:
-            yield Request(url=response.urljoin(software_page), callback=self.parse_versions,
-                          cb_kwargs=dict(device_name=device_name))
+    regex = {
+        'get_support_page': re.compile(r'var _supportProductID = "([\dA-Za-z]+)";', flags=re.MULTILINE)
+    }
 
-    def parse_versions(self, response: Response, device_name: str) -> Generator[FirmwareItem, None, None]:
-        for version in response.xpath(self.x_path['firmware']).extract():
-            yield from self.parse_urls(device_name=device_name, version=version)
+    allowed_domains = ['www.linksys.com', 'downloads.linksys.com']
 
-    def parse_urls(self, device_name: str, version: str) -> Generator[FirmwareItem, None, None]:
-        self.PRODUCT_DICTIONARIES = list()
-        for firmware in re.findall(r'Ver.+href=\".+(?:bin|img)\"', version):
-            if re.search(r'(\.img|\.bin)', firmware):
-                yield from self.parse_firmware(
-                    meta_data=self.prepare_meta_data(firmware=firmware, device_name=device_name,
-                                                     device_class=self.map_device_class(device_name)))
+    def start_requests(self):
+        for url in self.start_urls:
+            yield Request(url, cb_kwargs=dict(page=0))
 
-    def parse_firmware(self, meta_data: dict) -> Generator[FirmwareItem, None, None]:
-        if meta_data not in self.PRODUCT_DICTIONARIES:
-            self.PRODUCT_DICTIONARIES.append(meta_data)
-            yield from self.prepare_item_pipeline(meta_data=meta_data)
+    def parse(self, response: Response, **kwargs) -> Generator[Request, None, None]:  # pylint disable=unused-argument
+        # reached last page in the previous request
+        if '0 Produkte gefunden' in response.body.decode():
+            return
 
-    @staticmethod
-    def prepare_item_pipeline(meta_data: dict) -> Generator[FirmwareItem, None, None]:
-        loader = ItemLoader(item=FirmwareItem(), selector=meta_data['file_urls'])
-        loader.add_value('file_urls', meta_data['file_urls'])
-        loader.add_value('vendor', meta_data['vendor'])
-        loader.add_value('device_name', meta_data['device_name'])
-        loader.add_value('firmware_version', meta_data['firmware_version'])
-        loader.add_value('device_class', meta_data['device_class'])
-        loader.add_value('release_date', meta_data['release_date'])
+        page = kwargs['page']
 
-        yield loader.load_item()
+        for product_url in response.xpath(self.xpath['product_urls_on_page']).extract():
+            yield Request(url=response.urljoin(product_url), callback=self.move_to_support_page)
 
-    @staticmethod
-    def prepare_meta_data(firmware: str, device_name: str, device_class: str) -> dict:
-        match = re.search(r'href="(.*\.bin|.*\.img)"', firmware)
-        file_urls = match.group(1) if match else 'N/A'
+        # move to next page in product catalogue
+        next_page = page + 1
+        yield Request(url=f'{response.url.rpartition("=")[0]}={next_page}', cb_kwargs=dict(page=next_page))
 
-        match = re.search(r'(?:Ver|Version)\.([^<([a-zA-Z]+]*)', firmware)
-        version = match.group(1).strip(' ').replace('\xa0', '') if match else 'N/A'
+    def move_to_support_page(self, response: Response) -> Optional[Request]:
+        support_page_matches = self.regex['get_support_page'].findall(response.body.decode())
+        if len(support_page_matches) < 1:
+            return None
+        return Request(url=response.urljoin(f'/de/support-product?rnId={support_page_matches[0]}'),
+                       callback=self.move_to_download_page)
 
-        match = re.search(
-            r'((?:[1-9]|0[1-9]|10|11|12)(?:\s|\.|/|-)(?:[a-zA-Z]+|[1-9]|[1-2][0-9]|30|31)(?:\s|\.|/|-)(?:20|19)\d{2})',
-            firmware)
-        date = datetime.strptime(match.group(1).replace(' ', '/').replace('\xa0', '/'), r"%m/%d/%Y").strftime(
-            "%Y-%m-%d") if match else 'N/A'
+    @classmethod
+    def extract_date_and_version(cls, response: Response) -> Tuple[str, str]:
+        matches = response.xpath(cls.xpath['date_and_version']).extract()
+        if len(matches) < 2:
+            return '', ''
 
-        return dict(file_urls=file_urls, vendor='Linksys', device_name=device_name,
-                    firmware_version=version, device_class=device_class, release_date=date)
+        firmware_version = matches[0].replace('Ver.', '')
+        release_date = matches[1].split(' ')[-1].replace('/', '-')
+        return firmware_version, release_date
 
-    def map_device_class(self, product: str) -> str:
-        for identifiers in self.device_classes.keys():
-            for shortcut in identifiers.shortcuts:
-                if product.startswith(shortcut):
-                    return self.device_classes[identifiers]
+    def move_to_download_page(self, response: Response) -> Optional[Request]:
+        download_page_matches = response.xpath(self.xpath['get_download_page']).extract()
+        if len(download_page_matches) < 1:
+            return None
 
-        raise UnknownDeviceClassException(
-            'The product: {} cannot be found in the Device Class dictionary.'.format(product))
+        product_name_matches = response.xpath(self.xpath['product_name']).extract()
+        if len(product_name_matches) < 1:
+            return None
+
+        device_name = product_name_matches[0][4:]
+        return Request(url=response.urljoin(download_page_matches[0]), callback=self.parse_download_page,
+                       cb_kwargs=dict(device_name=device_name), dont_filter=True)
+
+    def parse_download_page(self, response: Response, device_name: str) -> Generator[FirmwareItem, None, None]:
+        download_matches = response.xpath(self.xpath['download_link']).extract()
+        if len(download_matches) < 1:
+            return
+
+        file_url = download_matches[0]
+        firmware_version, release_date = self.extract_date_and_version(response)
+        device_class = self.map_device_class(device_name)
+
+        meta_data = {
+            'vendor': 'Linksys',
+            'file_urls': [file_url],
+            'device_name': device_name,
+            'device_class': device_class,
+            'firmware_version': firmware_version.strip(),
+            'release_date': release_date,
+        }
+
+        yield from self.item_pipeline(meta_data)
+
+    @classmethod
+    def map_device_class(cls, device_name: str) -> str:
+        for identifiers, device_class in cls.device_classes.items():
+            if device_name.startswith(identifiers.shortcuts):
+                return device_class
+        return ''
