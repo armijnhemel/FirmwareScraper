@@ -70,8 +70,6 @@ class Linksys(FirmwareSpider):
         'product_name': '//*[@class="part-number"]/text()',
     }
 
-    # start_urls = ['https://www.linksys.com/us/support/sitemap/']
-
     start_urls = [
         'https://www.linksys.com/de/c/whole-home-mesh-wifi/?q=%3AsortByProductRank&page=0',
         'https://www.linksys.com/de/c/WLAN-Router/?q=%3AsortByProductRank&page=0',
@@ -111,10 +109,10 @@ class Linksys(FirmwareSpider):
                        callback=self.move_to_download_page)
 
     @classmethod
-    def extract_date_and_version(cls, response: Response) -> Tuple[Optional[str], Optional[str]]:
+    def extract_date_and_version(cls, response: Response) -> Tuple[str, str]:
         matches = response.xpath(cls.xpath['date_and_version']).extract()
         if len(matches) < 2:
-            return None, None
+            return '', ''
 
         firmware_version = matches[0].replace('Ver.', '')
         release_date = matches[1].split(' ')[-1].replace('/', '-')
