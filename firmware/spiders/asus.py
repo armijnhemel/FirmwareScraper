@@ -20,7 +20,7 @@ class Asus(FirmwareSpider):
 
     custom_settings = {
         'ROBOTSTXT_OBEY': True,
-        # being nice to AVM servers
+        # being nice to ASUS servers
         'CONCURRENT_REQUESTS': 1,
         'CONCURRENT_ITEMS': 1,
         'DOWNLOAD_DELAY': 0.75,
