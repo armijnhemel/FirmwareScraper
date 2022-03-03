@@ -63,7 +63,7 @@ class Zyxel(FirmwareSpider):
         dirty_release_date = response.xpath(self.xpath['get_release_date']).get()
 
         if None in [download_link, firmware_version, dirty_release_date]:
-            yield None
+            yield from []
             return
 
         release_date = datetime.strptime(dirty_release_date.strip(), '%b %d, %Y').strftime('%d-%m-%Y')
