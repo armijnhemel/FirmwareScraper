@@ -70,8 +70,6 @@ class Linksys(FirmwareSpider):
         'product_name': '//*[@class="part-number"]/text()',
     }
 
-    # start_urls = ['https://www.linksys.com/us/support/sitemap/']
-
     start_urls = [
         'https://www.linksys.com/de/c/whole-home-mesh-wifi/?q=%3AsortByProductRank&page=0',
         'https://www.linksys.com/de/c/WLAN-Router/?q=%3AsortByProductRank&page=0',
@@ -92,6 +90,7 @@ class Linksys(FirmwareSpider):
     def parse(self, response: Response, **kwargs) -> Generator[Request, None, None]:  # pylint disable=unused-argument
         # reached last page in the previous request
         if '0 Produkte gefunden' in response.body.decode():
+            yield from []
             return
 
         page = kwargs['page']
@@ -136,6 +135,7 @@ class Linksys(FirmwareSpider):
     def parse_download_page(self, response: Response, device_name: str) -> Generator[FirmwareItem, None, None]:
         download_matches = response.xpath(self.xpath['download_link']).extract()
         if len(download_matches) < 1:
+            yield from []
             return
 
         file_url = download_matches[0]

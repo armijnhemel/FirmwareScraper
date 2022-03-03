@@ -35,6 +35,7 @@ class Asus(FirmwareSpider):
         try:
             data = json.loads(response.body.decode())
         except (UnicodeDecodeError, JSONDecodeError):
+            yield from []
             return
 
         for product in data['Result']['ProductList']:
@@ -60,12 +61,14 @@ class Asus(FirmwareSpider):
         try:
             data = json.loads(response.body.decode())
         except (UnicodeDecodeError, JSONDecodeError):
+            yield from []
             return
 
         firmwares = self.extract_firmware_files(data)
         latest_firmware = self.get_latest_firmware(firmwares)
 
         if latest_firmware is None:
+            yield from []
             return
 
         meta_data = {
