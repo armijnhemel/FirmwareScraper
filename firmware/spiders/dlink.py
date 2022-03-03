@@ -1,10 +1,11 @@
 from datetime import datetime
-from typing import Generator
+from typing import Generator, Union
 
 from scrapy import Request
 from scrapy.http import Response
 
 from firmware.custom_spiders import FirmwareSpider
+from firmware.items import FirmwareItem
 
 
 class DLink(FirmwareSpider):
@@ -65,7 +66,7 @@ class DLink(FirmwareSpider):
         for name, detail_link in zip(names, detail_links):
             yield Request(url=response.urljoin(detail_link), callback=self.process_detail_page, cb_kwargs=dict(product_name=name))
 
-    def process_detail_page(self, response: Response, product_name: str, product_revision: str = ''):
+    def process_detail_page(self, response: Response, product_name: str, product_revision: str = '') -> Generator[Union[Request, FirmwareItem], None, None]:
         if product_revision == '':
             latest_revision_on_page = response.xpath(self.xpath['detail_latest_revision_name']).extract()
             latest_revision_query_param = response.xpath(self.xpath['detail_latest_revision_param']).extract()
@@ -83,6 +84,7 @@ class DLink(FirmwareSpider):
         download_link = response.xpath(self.xpath['download_link']).extract()
 
         if len(download_link + release_date + version) != 3:
+            yield from []
             return
 
         meta_data = {
