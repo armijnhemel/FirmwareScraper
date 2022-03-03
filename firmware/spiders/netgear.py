@@ -64,7 +64,7 @@ class Netgear(FirmwareSpider):
 
         if None in [kb_article_link, download_link, dirty_version]:
             logging.warning([kb_article_link, download_link, dirty_version])
-            yield None
+            yield from []
             return
         firmware_version = dirty_version.split(' ')[-1].strip()
 
