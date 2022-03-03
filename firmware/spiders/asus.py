@@ -16,7 +16,10 @@ class Asus(FirmwareSpider):
     name = 'asus'
     manufacturer = 'ASUS'
 
-    start_urls = ['https://odinapi.asus.com/recent-data/apiv2/SeriesFilterResult?SystemCode=asus&WebsiteCode=de&ProductLevel1Code=Networking-IoT-Servers&ProductLevel2Code=Wifi-Routers&PageSize=100&PageIndex=1&CategoryName=&SeriesName=ROG-Republic-of-Gamers,ASUS-Gaming-Routers,ASUS-WiFi-Routers&SubSeriesName=&Spec=&SubSpec=&Sort=Recommend&siteID=www&sitelang=']  # pylint: disable=line-too-long
+    start_urls = ['https://odinapi.asus.com/recent-data/apiv2/SeriesFilterResult?SystemCode=asus&WebsiteCode=de'
+                  '&ProductLevel1Code=Networking-IoT-Servers&ProductLevel2Code=Wifi-Routers&PageSize=100&PageIndex=1'
+                  '&CategoryName=&SeriesName=ROG-Republic-of-Gamers,ASUS-Gaming-Routers,ASUS-WiFi-Routers'
+                  '&SubSeriesName=&Spec=&SubSpec=&Sort=Recommend&siteID=www&sitelang=']
 
     custom_settings = {
         'ROBOTSTXT_OBEY': True,
@@ -32,7 +35,6 @@ class Asus(FirmwareSpider):
         try:
             data = json.loads(response.body.decode())
         except (UnicodeDecodeError, JSONDecodeError):
-            yield None
             return
 
         for product in data['Result']['ProductList']:
@@ -58,14 +60,12 @@ class Asus(FirmwareSpider):
         try:
             data = json.loads(response.body.decode())
         except (UnicodeDecodeError, JSONDecodeError):
-            yield None
             return
 
         firmwares = self.extract_firmware_files(data)
         latest_firmware = self.get_latest_firmware(firmwares)
 
         if latest_firmware is None:
-            yield None
             return
 
         meta_data = {
