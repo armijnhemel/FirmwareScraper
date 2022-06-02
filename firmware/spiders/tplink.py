@@ -42,11 +42,10 @@ class TPLink(FirmwareSpider):
         'product_name': '//h2[@class="product-name"]/text()|//label[@class="model-select"]/p/span/text()',
         'product_support_link': '//a[contains(@class,"support")]/@href',
         'firmware_download_link': '//tr[@class="basic-info"][1]//a[contains(@class, "download") and '
-                                  'contains(@data-vars-event-category, "Firmware") and (contains(@href, "_V") or '
-                                  'contains(@href, "_v") or contains(@href, "firmware"))]/@href',
+                                  '(contains(@data-vars-event-category, "Firmware") or '
+                                  'contains(@href, "firmware"))]/@href',
         'device_revision': '//span[@id="verison-hidden"]/text()',
-        'firmware_release_date': '//*[@id="content_Firmware"]/table//tr[@class="detail-info"][1]/td[1]/span[2]/text()[1]',
-        
+        'firmware_release_date': '//*[@id="content_Firmware"]/table//tr[@class="detail-info"][1]/td[1]/span[2]/text()[1]',   
     }
 
     def parse(self, response: Response, **kwargs: {}) -> Generator[Request, None, None]:
