@@ -40,11 +40,17 @@ class FirmwareSpiderMiddleware(object):
 class FirmwareDownloaderMiddleware(object):
 
     def __init__(self, driver_executable_path=None):
-        options = webdriver.FirefoxOptions()
-        options.headless = True
 
         if isfile(driver_executable_path):
-            self.driver = webdriver.Firefox(options=options, executable_path=driver_executable_path)
+            if 'geckodriver' in driver_executable_path:
+                options = webdriver.FirefoxOptions()
+                driver_cls = webdriver.Firefox
+            else:
+                options = webdriver.ChromeOptions()
+                driver_cls = webdriver.Chrome
+
+            options.headless = True
+            self.driver = driver_cls(options=options, executable_path=driver_executable_path)
             self.wait = WebDriverWait(self.driver, 15)
         else:
             print('Selenium driver path not set correctly')
