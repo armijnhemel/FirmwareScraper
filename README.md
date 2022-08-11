@@ -4,23 +4,17 @@ The FirmwareScraper is able to scrape firmware from multiple vendor webpages usi
 
 ## Installation
 
-### Ubuntu 14.04 and above
+### Ubuntu 20.04 and above
 
 Some packages need to be installed using apt-get/apt before installing scrapy
 
-```
-sudo apt-get install python-dev python-pip libxml2-dev libxslt1-dev zlib1g-dev libffi-dev libssl-dev
-```
-
-As python 2 is almost at EOL, python3 additionally needs python3-dev
-
-```
-sudo apt-get install python3 python3-dev
+```bash
+sudo apt-get install python3 python3-dev python3-pip libxml2-dev libxslt1-dev zlib1g-dev libffi-dev libssl-dev
 ```
 
 Scrapy can then be installed using the following command:
 
-```
+```bash
 pip install scrapy
 ```
 
@@ -30,13 +24,13 @@ For more information about the installation process of scrapy, [see here.](https
 
 To use the existing scrapy project, just clone it into a repository of your choice
 
-```
+```bash
 git clone https://github.com/mellowCS/FirmwareScraper.git
 ```
 
 To run a spider, just go into the project's folder and type the following command into the terminal:
 
-```
+```bash
 scrapy crawl *name of spider e.g. avm* -o *name of file to output metadata e.g. spidername.json*
 ```
 
@@ -45,7 +39,7 @@ scrapy crawl *name of spider e.g. avm* -o *name of file to output metadata e.g. 
 ### Selenium
 For selenium to be able to render the desired page you need a driver executable (geckodriver, chromedriver etc.) to be in the correct path in the settings.py.
 
-```
+```bash
 SELENIUM_DRIVER_EXECUTABLE_PATH = '/home/username/driver/geckodriver'
 ```
 
@@ -55,7 +49,7 @@ To get the supported drivers for selenium [see here](https://selenium.dev/seleni
 
 ### Beautiful Soup
 Some spiders use Beautiful Soup to search for attributes in a webpage. 
-```
+```bash
 pip install beautifulsoup4
 ```
 For more information about the installation process of Beautiful Soup, [see here.](https://www.crummy.com/software/BeautifulSoup/bs4/doc/#installing-beautiful-soup)
@@ -73,7 +67,7 @@ All developed spiders and corresponding tests should be contained in the folders
 
 For the file download, scrapy's file pipline is activated in settings.py. To store the files, a valid path has to be added
 
-```
+```python
 ITEM_PIPELINES = {
     'scrapy.pipelines.files.FilesPipeline': 1
 }
@@ -83,7 +77,7 @@ FILES_STORE = 'valid/path/to/files/'
 
 Additionally, the necessary fields are added to the FirmwareItem class in the items.py
 
-```
+```python
 class FirmwareItem(scrapy.Item):
     file_urls = scrapy.Field()
     files = scrapy.Field()
@@ -91,7 +85,7 @@ class FirmwareItem(scrapy.Item):
 
 To add files to the pipeline use the following commands in the spider class
 
-```
+```python
 for url in ...:
     loader = ItemLoader(item=FirmwareItem(), selector=url)
     loader.add_value('file_urls', url)
