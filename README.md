@@ -31,7 +31,7 @@ git clone https://github.com/mellowCS/FirmwareScraper.git
 To run a spider, just go into the project's folder and type the following command into the terminal:
 
 ```bash
-scrapy crawl *name of spider e.g. avm* -o *name of file to output metadata e.g. spidername.json*
+TMPDIR=$HOME/tmp scrapy crawl *name of spider e.g. avm* -o *name of file to output metadata e.g. spidername.json*
 ```
 
 ## Dependencies
