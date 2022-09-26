@@ -68,10 +68,7 @@ All developed spiders and corresponding tests should be contained in the folders
 For the file download, scrapy's file pipline is activated in settings.py. To store the files, a valid path has to be added
 
 ```python
-ITEM_PIPELINES = {<<<<<<< master
-34
- 
-
+ITEM_PIPELINES = {
     'scrapy.pipelines.files.FilesPipeline': 1
 }
 
